@@ -1,0 +1,2 @@
+#!/bin/sh
+python3 "/home/lee/.arduino15/packages/esp32/tools/esptool_py/4.6/esptool.py" --chip esp32 --port "/dev/ttyUSB1" --baud 921600  --before default_reset --after hard_reset write_flash  -z --flash_mode keep --flash_freq keep --flash_size keep 0x1000 "./build/esp32.esp32.esp32/barographESP32.ino.bootloader.bin" 0x8000 "./build/esp32.esp32.esp32/barographESP32.ino.partitions.bin" 0xe000 "/home/lee/.arduino15/packages/esp32/hardware/esp32/3.0.7/tools/partitions/boot_app0.bin" 0x10000 "./build/esp32.esp32.esp32/barographESP32.ino.bin" 
