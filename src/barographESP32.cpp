@@ -6,7 +6,7 @@
 //
 //
 //-------------------------------------------------
-char version[] = "1.03";
+char version[] = "1.04";
 
 #include <Wire.h>
 #include <Adafruit_Sensor.h>
@@ -114,6 +114,7 @@ void WriteEEPROM0(int deviceaddress, unsigned int eeaddress, byte data ) ;
 byte ReadEEPROM0(int deviceaddress, unsigned int eeaddress ) ;
 void WriteEEPROM1(int deviceaddress, unsigned int eeaddress, byte data ) ;
 byte ReadEEPROM1(int deviceaddress, unsigned int eeaddress ) ;
+void TestFillEeprom();
 
 
  #define BMP 
@@ -189,6 +190,9 @@ void setup()
       Serial.println("Wifi Ready");
       Serial.print("IP address: ");
       Serial.println(WiFi.localIP());
+      Serial.print("MAC Address: ");
+      Serial.println(WiFi.macAddress());
+
     }
 
     digitalWrite (LED_4 , HIGH);// wifi started
@@ -197,7 +201,7 @@ void setup()
 #endif
     // Start the TFT
     tft.begin();
-    tft.setRotation(1);
+    tft.setRotation(3);
     tft.fillScreen(BLACK);
     tft.setTextDatum (TL_DATUM);
 
@@ -208,12 +212,27 @@ void setup()
     tft.setFreeFont (FSS9);
     // Set up the Barometer chip
     /* Default settings from datasheet. */
-#ifdef BMP
+    #ifdef BMP
     if (!bmp.begin(0x76))
     {
         Serial.println(F("Could not find a valid BMP280 sensor, check wiring!"));
     }
+    else
+    {
+    /* Default settings from datasheet. */
+        bmp.setSampling(Adafruit_BMP280::MODE_NORMAL,     /* Operating Mode. */
+                        Adafruit_BMP280::SAMPLING_X2,     /* Temp. oversampling */
+                        Adafruit_BMP280::SAMPLING_X16,    /* Pressure oversampling */
+                        Adafruit_BMP280::FILTER_X16,      /* Filtering. */
+                        Adafruit_BMP280::STANDBY_MS_500); /* Standby time. */
+    }
+#elif BME
+    if (!bme.begin(0x76))
+    {
+        Serial.println(F("Could not find a valid BME280 sensor, check wiring!"));
+    }
 #endif
+
     Wire.begin();
     //Wire.setClock(400000);
     Wire.setClock(100000);
@@ -259,7 +278,12 @@ void setup()
 //---------------------------------------------------------------------
 void SendPressure (uint16_t baro)
 {
-    Serial.println("Sending Baro");
+    static bool bSentBaro = false;
+    if (bSentBaro == false)
+    {
+        Serial.println("Sending Baro");
+        bSentBaro = true;
+    }
     tN2kMsg N2kMsg;
     SetN2kPressure(N2kMsg,0,2,N2kps_Atmospheric,baro*10);
     NMEA2000.SendMsg(N2kMsg);
@@ -270,7 +294,6 @@ void SendPressure (uint16_t baro)
 void DrawInitScreen()
 {
     // put a box on the screen
-    Serial.print ("draw init screen");
     tft.setFreeFont (FSS12);
 
     tft.fillScreen (BLACK);
@@ -795,7 +818,9 @@ void ReadData ()
         value |= ReadEEPROM(EepromAddr , (i*2)+1) << 8;
         if (value == 0xffff || value < 9500 || value > 10500)
         {
-            m_baroDataArray[i] = 10134;
+            //m_baroDataArray[i] = 10134;
+            TestFillEeprom();
+            return;
         }
         else
             m_baroDataArray[i] = value;
@@ -808,6 +833,30 @@ void ReadData ()
         m_baroDataHead = 0;
     
 }
+
+//-----------------------------------------------------
+// Test Fill EEprom
+//-----------------------------------------------------
+void TestFillEeprom()
+{
+    Serial.println ("Test Filling EEprom");
+    for (int i = 0 ; i < BARO_ARRAY_SIZE ; i++)
+    {
+        // Put a sine wave in it
+        // 400 points, each point is 1 degree
+        const float DEG2RAD = 180.0f / 3.141;
+        float sinValue = sin (i / DEG2RAD);
+        sinValue *= 20.0f;    //amplify by 10
+        // it to 1000mb
+        sinValue += 10000.0f;
+        int value = (int16_t) sinValue;
+        WriteEEPROM(EepromAddr , i*2 , value & 0xff);
+        WriteEEPROM(EepromAddr , (i*2)+1 , (value>>8) & 0xff);
+
+        m_baroDataArray[i] = sinValue;
+    }
+}
+
 
 //----------------------------------------
 //
@@ -865,7 +914,33 @@ void SplashScreen ()
     tft.drawString ("Version" , 150 , 150 , 1);
     tft.drawString (version , 300 , 150 , 1);
     tft.setTextColor(TFT_YELLOW , cBackground);
-    tft.drawString ("Lee Playford (c) 2024" , 150 , 200 , 1);
+    tft.drawString ("Lee Playford (c) 2025" , 150 , 200 , 1);
+
+    if (wifiConnected)
+    {
+        tft.setTextColor(TFT_GREEN , cBackground);
+        tft.drawString ("IPAddress" , 50 , 275 , 1);
+        tft.drawString (WiFi.localIP().toString() , 250 , 275 , 1);
+        tft.drawString ("MAC Address" , 50 , 300 , 1);
+        tft.drawString (WiFi.macAddress() , 250 , 300 , 1);
+    }
+
+}
+
+//-------------------------------------
+//
+//-------------------------------------
+int16_t ReadPressure()
+{
+
+#ifdef BMP
+    return (int16_t)(bmp.readPressure() / 10.0);
+#elif BME
+    return (int16_t)(bme.readPressure() / 10.0);
+#else
+   return 10134;
+#endif
+
 }
 
 //----------------------------------------
@@ -877,12 +952,10 @@ void loop()
     LED_1_State = HIGH;
     LED_2_State = LOW;
     
-    for (int i = 0 ; i < 10 ; i++)
+    for (int i = 0 ; i < 6 ; i++)
     {
         digitalWrite (LED_1 , LED_1_State);
         digitalWrite (LED_2 , LED_2_State);
-        digitalWrite (LED_3 , LED_1_State);
-        digitalWrite (LED_4 , LED_2_State);
         LED_1_State = !LED_1_State;
         LED_2_State = !LED_2_State;
         delay (500);
@@ -908,8 +981,8 @@ void loop()
     uint32_t lastSendTime = 0;
     int16_t lastPressure = 0;
 
-#ifdef BMP
-     int16_t int_pressure = (int16_t)(bmp.readPressure() / 10.0);
+#if defined (BMP) || BME
+     int16_t int_pressure = ReadPressure();
 #else
     int16_t int_pressure = 10134;
 #endif
@@ -930,8 +1003,8 @@ void loop()
         if (lastReadTime == 0 || millis() - lastReadTime > SAMPLE_TIME / 8)
         {
             lastReadTime = millis();
-#ifdef BMP
-            int_pressure = (int16_t)(bmp.readPressure() / 10.0);
+#if defined (BMP) || BME
+            int_pressure = (int16_t)(ReadPressure());
 #else
             int_pressure = 10134;
 #endif
