@@ -3,6 +3,8 @@
 //-------------------------------------
 #ifndef LCD_SCREEN_H
 #define LCD_SCREEN_H
+
+
 #include <TFT_eSPI.h>
 #include <SPI.h>
 #include <IPAddress.h>
@@ -36,6 +38,9 @@ const uint16_t GRADULE = 66;
 const uint16_t BOTTOM_GRAPH= 310;
 const uint16_t LEFT_GRAPH = 70;
 
+const int cBackground = TFT_BLACK;
+
+
 
 //-------------------------------------
 // LCD SCREEN Class
@@ -57,6 +62,11 @@ public:
     void AddScale (uint16_t baro , uint16_t stepVal);
     void SplashScreen (bool wifiConnected , IPAddress ip , String mac);
     void DrawBaro (uint16_t * baroData , int p_Size, uint16_t baroHead ,uint16_t high , uint16_t low , uint16_t range);
+
+    TFT_eSPI & GetTft (void)
+    {
+        return m_tft;
+    }
 
 private:
     TFT_eSPI m_tft;

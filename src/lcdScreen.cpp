@@ -257,7 +257,6 @@ void LcdScreen::DrawBaro (uint16_t * p_pBaroData , int p_Size , uint16_t offset 
 //----------------------------------------
 void LcdScreen::SplashScreen (bool wifiConnected , IPAddress ip , String mac)
 {
-    const int cBackground = TFT_BLACK;
     m_tft.fillScreen (cBackground);
     m_tft.setFreeFont (FSS24);
     m_tft.setTextColor(TFT_SKYBLUE , cBackground);

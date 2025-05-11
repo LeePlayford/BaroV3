@@ -165,6 +165,7 @@ bool EepromManager::TestEeprom(int p_Size , bool printResult , int location )
             float percent = ((float)i / (float)p_Size) * 100.f;
             sprintf(buf , "%d%%" , (int) percent);
             Serial.printf ("Eeprom test %d%%\r\n" , (int) percent);
+
         }
         
         if (byte1 != 0xaa || byte2 != 0x55)
@@ -197,7 +198,12 @@ bool EepromManager::TestEeprom(int p_Size , bool printResult , int location )
 void EepromManager::StoreData (uint16_t * p_Data , int p_Size , uint16_t &p_DataHead)
 {
     uint16_t offset = p_DataHead;
+    
+#ifdef DEBUG    
+    Serial.println ("Storing Data");
+#endif
 
+    // Store the data
     for (int i = 0 ; i < p_Size ; i++)
     {
         WriteEEPROM (EepromAddr , i*2 , p_Data[i] & 0xff);
@@ -230,8 +236,18 @@ void EepromManager::ReadData (uint16_t * p_Data , int p_Size , uint16_t &p_DataH
     p_DataHead = ReadEEPROM (EepromAddr , HeadOffset);
     p_DataHead |= (ReadEEPROM (EepromAddr , HeadOffset2) << 8);
 
-    if (p_DataHead >= p_Size)
+#ifdef DEBUG
+    Serial.printf ("Read Data Head %d\r\n" , p_DataHead);
+#endif
+
+// Check the data head
+    if (p_DataHead < 0 || p_DataHead >= p_Size)
+    {
+        Serial.printf ("Data Head out of range %d\r\n" , p_DataHead);
         p_DataHead = 0;
+    }
+    else
+        Serial.printf ("Data Head %d\r\n" , p_DataHead);
     
 }
 
@@ -256,5 +272,10 @@ void EepromManager::TestFillEeprom(uint16_t * p_Data, int p_Size)
 
         p_Data[i] = sinValue;
     }
+    
+    // Reset the data Head
+    WriteEEPROM (EepromAddr , HeadOffset , 0);
+    WriteEEPROM (EepromAddr , HeadOffset2 , 0);   
+
 }
 

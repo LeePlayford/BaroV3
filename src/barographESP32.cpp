@@ -2,15 +2,12 @@
 //-------------------------------------------------
 //
 // Project BaroGraph
-//
-//
+// Author Lee Playford
+// Date May 2025    
 //
 //-------------------------------------------------
 
-
 #include <Wire.h>
-#include <Adafruit_Sensor.h>
-#include <Adafruit_BMP280.h>
 #include <stdio.h>
 #include <TFT_eSPI.h>
 #include <WiFi.h>
@@ -32,10 +29,9 @@
 
 #include "eepromManager.h"
 #include "lcdScreen.h"
+#include "boardTests.h" 
+#include "Sensors.h"
 
-
-
-Adafruit_BMP280 bmp; // I2C
 
 //led defines
 #define LED_1 GPIO_NUM_4
@@ -59,13 +55,7 @@ uint32_t SAMPLE_TIME = 86400/4*10;
 uint16_t m_baroDataArray[BARO_ARRAY_SIZE];
 uint16_t m_baroDataHead = 0;
 
-// baro filter
-#define FILTER_SIZE 8
-uint16_t m_baroFilter[FILTER_SIZE]= {0};
-
-
-
-// create the eepromn object
+// create the eeprom object
 EepromManager eepromManager;
 
 // create the LCD Screen object
@@ -81,18 +71,14 @@ Stream *ReadStream=&READ_STREAM;
 Stream *ForwardStream=&FORWARD_STREAM;
 
 // WIFI network defines
-const char* ssid = "TALKTALK4AD3F0";
-const char* password = "C3AKAC4R";
+//const char* ssid = "TALKTALK4AD3F0";
+//const char* password = "C3AKAC4R";
+const char* ssid = "Wireless 2.4G_08C4E8_Sh3d";
+const char* password = "M00n5hineSh3d!";
 bool wifiConnected = false;
  
-
 // Function prototypes
 void GetHighLowRange (uint16_t& high , uint16_t &low , uint16_t &range);
-
-
- #define BMP 
- #define OTA
- //#define TESTEEPROM
  
 //---------------------------------------------------------------------
 //
@@ -175,35 +161,13 @@ void setup()
     // Start the TFT
     lcdScreen.Init();
     
- 
-    
-    // Set up the Barometer chip
-    /* Default settings from datasheet. */
-    #ifdef BMP
-    if (!bmp.begin(0x76))
-    {
-        Serial.println(F("Could not find a valid BMP280 sensor, check wiring!"));
-    }
-    else
-    {
-    /* Default settings from datasheet. */
-        bmp.setSampling(Adafruit_BMP280::MODE_NORMAL,     /* Operating Mode. */
-                        Adafruit_BMP280::SAMPLING_X2,     /* Temp. oversampling */
-                        Adafruit_BMP280::SAMPLING_X16,    /* Pressure oversampling */
-                        Adafruit_BMP280::FILTER_X16,      /* Filtering. */
-                        Adafruit_BMP280::STANDBY_MS_500); /* Standby time. */
-    }
-#elif BME
-    if (!bme.begin(0x76))
-    {
-        Serial.println(F("Could not find a valid BME280 sensor, check wiring!"));
-    }
-#endif
-
+    // Initialise the Sensors
+    InitSensors();
+   
+    // Start the I2C wire
     Wire.begin();
     //Wire.setClock(400000);
     Wire.setClock(100000);
-
 
     // make a unique number from the mac address
     uint8_t mac[6];
@@ -241,7 +205,7 @@ void setup()
 }
 
 //---------------------------------------------------------------------
-//
+// Send the Baro over the N2K bus
 //---------------------------------------------------------------------
 void SendPressure (uint16_t baro)
 {
@@ -255,9 +219,6 @@ void SendPressure (uint16_t baro)
     SetN2kPressure(N2kMsg,0,2,N2kps_Atmospheric,baro*10);
     NMEA2000.SendMsg(N2kMsg);
 }
-
-
-
 
 //---------------------------------------------------------------------
 //
@@ -298,6 +259,7 @@ uint16_t GetRange (uint16_t range)
     return range;
     
 }
+
 //---------------------------------------------------------------------
 //
 //---------------------------------------------------------------------
@@ -313,37 +275,6 @@ void ScaleHighLowRange (uint16_t& high , uint16_t &low , uint16_t &range)
     low = high - range;
 }
 
-
-//----------------------------------------
-//
-//----------------------------------------
-uint16_t FilterBaro (uint16_t baro)
-{
-    static int head = 0;
-    // init the filter
-    if (m_baroFilter[0] == 0)
-    {
-        for (int i = 0 ; i < FILTER_SIZE ; i++)
-        {
-            m_baroFilter[i] = baro;
-        }
-        return baro;
-    }
-    else 
-    {
-        m_baroFilter[head++] = baro;
-        if (head == FILTER_SIZE)
-            head = 0;
-    }
-    uint32_t total = 0; 
-    for (int i = 0 ; i < FILTER_SIZE ; i++)
-    {
-        total += m_baroFilter[i];
-    }
-    return total / FILTER_SIZE;
-}
-
-
 //----------------------------------------
 //
 //----------------------------------------
@@ -354,22 +285,6 @@ uint16_t FilterBaro (uint16_t baro)
     ledcWrite (channel , duty);
 }*/
 
-
-//-------------------------------------
-//
-//-------------------------------------
-int16_t ReadPressure()
-{
-
-#ifdef BMP
-    return (int16_t)(bmp.readPressure() / 10.0);
-#elif BME
-    return (int16_t)(bme.readPressure() / 10.0);
-#else
-   return 10134;
-#endif
-
-}
 
 //-------------------------------------
 //
@@ -406,6 +321,11 @@ void UpdateBaro(int16_t baro )
 void loop()
 {
     lcdScreen.SplashScreen(wifiConnected , WiFi.localIP() , WiFi.macAddress());
+
+    #ifdef TEST_EEPROM
+    RunBoardTests(lcdScreen , eepromManager);
+#endif
+
     // Blink the LEDS to show we are alive
     LED_1_State = HIGH;
     LED_2_State = LOW;
@@ -426,10 +346,6 @@ void loop()
      // draw the screen
     lcdScreen.DrawInitScreen ();
 
-#ifdef TESTEEPROM
-    TestEeprom();
-#endif
-
     // Read the eeprom
     eepromManager.ReadData(m_baroDataArray , BARO_ARRAY_SIZE , m_baroDataHead);
     // Local variables
@@ -439,11 +355,7 @@ void loop()
     uint32_t lastSendTime = 0;
     int16_t lastPressure = 0;
 
-#if defined (BMP) || BME
-     int16_t int_pressure = ReadPressure();
-#else
-    int16_t int_pressure = 10134;
-#endif
+    int16_t int_pressure = ReadPressure();
  
     int16_t counter = 0;
     
@@ -461,12 +373,7 @@ void loop()
         if (lastReadTime == 0 || millis() - lastReadTime > SAMPLE_TIME / 8)
         {
             lastReadTime = millis();
-#if defined (BMP) || BME
             int_pressure = (int16_t)(ReadPressure());
-#else
-            int_pressure = 10134;
-#endif
-            int_pressure = FilterBaro (int_pressure);
         }        
       
         if (lastUpdateTime == 0 || millis() - lastUpdateTime > SAMPLE_TIME )
@@ -487,12 +394,12 @@ void loop()
                 // work out the three hours ago value
                 int16_t offset = m_baroDataHead - POINTS_PER_DAY / 8;
                 if (offset < 0) offset += POINTS_PER_DAY; 
+                
                 int16_t threeHours = m_baroDataArray[offset] ;
                 if (threeHours < MIN_BARO || threeHours > MAX_BARO)
                     threeHours = int_pressure;
             
                 lcdScreen.UpdateTrend (int_pressure , threeHours);
-
             }
 
             // update the graph
@@ -517,6 +424,5 @@ void loop()
 #endif
         NMEA2000.ParseMessages();
 
-                
     }
 }
