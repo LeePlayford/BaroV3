@@ -14,6 +14,7 @@
 #include <ESPmDNS.h>
 #include <WiFiUdp.h>
 #include <ArduinoOTA.h>
+#include <driver/twai.h>
 
 // ESP32 Can Setup
 #define ESP32_CAN_TX_PIN GPIO_NUM_16
@@ -34,16 +35,10 @@
 
 
 //led defines
-#define LED_1 GPIO_NUM_4
-#define LED_2 GPIO_NUM_33
-#define LED_3 GPIO_NUM_32
-#define LED_4 GPIO_NUM_25
-
-bool LED_1_State = 0;
-bool LED_2_State = 0;
-bool LED_3_State = 0;
-bool LED_4_State = 0;
-
+#define BACKLIGHT GPIO_NUM_32
+#define CAN_BUS GPIO_NUM_25
+#define LED01 GPIO_NUM_25
+#define LED02 GPIO_NUM_26
 
 // Data Defines
 uint32_t SAMPLE_TIME = 86400/4*10;
@@ -76,9 +71,12 @@ Stream *ForwardStream=&FORWARD_STREAM;
 const char* ssid = "Wireless 2.4G_08C4E8_Sh3d";
 const char* password = "M00n5hineSh3d!";
 bool wifiConnected = false;
+bool canBusConnected = false;
  
 // Function prototypes
 void GetHighLowRange (uint16_t& high , uint16_t &low , uint16_t &range);
+void HandleNMEA2000Msg(const tN2kMsg & N2kMsg);
+
  
 //---------------------------------------------------------------------
 //
@@ -91,15 +89,16 @@ void setup()
     Serial.println (version);
     
     // Setup the LEDS
-    pinMode (LED_1 , OUTPUT);
-    pinMode (LED_2 , OUTPUT);
-    pinMode (LED_3 , OUTPUT);
-    pinMode (LED_4 , OUTPUT);
+    pinMode (BACKLIGHT , OUTPUT);
+    pinMode (CAN_BUS , OUTPUT);
 
-    digitalWrite (LED_1 , LOW);
-    digitalWrite (LED_2 , LOW);
-    digitalWrite (LED_3 , LOW);
-    digitalWrite (LED_4 , LOW);
+    pinMode (LED01 , OUTPUT);
+    pinMode (LED02 , OUTPUT);
+    //digitalWrite (LED01 , HIGH);
+    //digitalWrite (LED02 , HIGH);
+
+    //digitalWrite (BACKLIGHT , HIGH);
+    digitalWrite (CAN_BUS , HIGH);
 
 #ifdef OTA
     WiFi.mode(WIFI_STA);
@@ -113,9 +112,9 @@ void setup()
     else
     {
         wifiConnected = true;
-    
+        //digitalWrite (CAN_BUS , HIGH);// wifi started
 
-    
+     
 // Over the Air Updates
       ArduinoOTA
         .onStart([]() {
@@ -154,8 +153,6 @@ void setup()
 
     }
 
-    digitalWrite (LED_4 , HIGH);// wifi started
-    digitalWrite (LED_3 , LOW);// wifi started
 
 #endif
     // Start the TFT
@@ -185,8 +182,8 @@ void setup()
     NMEA2000.SetProductInformation("00000001", // Manufacturer's Model serial code
                                  100, // Manufacturer's product code
                                  "Barograph ESP32",  // Manufacturer's Model ID
-                                 "1.0.0.0 (2020-08-15)",  // Manufacturer's Software version code
-                                 "1.0.2.0 (2019-08-15)" // Manufacturer's Model version
+                                 "2.0.0.0 (2025-06-18)",    // Manufacturer's Software version code
+                                 "4.0.0.0 (2025-02-01)"     // Manufacturer's Model version
                                  );
     // Set device information
     NMEA2000.SetDeviceInformation(uniqueId, // Unique number. Use e.g. Serial number.
@@ -197,10 +194,11 @@ void setup()
     
     // If you also want to see all traffic on the bus use N2km_ListenAndNode instead of N2km_NodeOnly below
     NMEA2000.SetForwardStream(&Serial);
-    NMEA2000.SetMode(tNMEA2000::N2km_NodeOnly , 23);
+    NMEA2000.SetMode(tNMEA2000::N2km_NodeOnly , 33);
     NMEA2000.EnableForward(false); // Disable all msg forwarding to USB (=Serial)
-    NMEA2000.SendProductInformation (0xff);
+    NMEA2000.SetMsgHandler (HandleNMEA2000Msg);
     NMEA2000.Open();
+    NMEA2000.SendProductInformation (0x0);
    
 }
 
@@ -210,14 +208,21 @@ void setup()
 void SendPressure (uint16_t baro)
 {
     static bool bSentBaro = false;
-    if (bSentBaro == false)
+    if (canBusConnected == false)
     {
-        Serial.println("Sending Baro");
-        bSentBaro = true;
+        NMEA2000.Open(); // Open the NMEA2000 bus if not already open
     }
-    tN2kMsg N2kMsg;
-    SetN2kPressure(N2kMsg,0,2,N2kps_Atmospheric,baro*10);
-    NMEA2000.SendMsg(N2kMsg);
+    else
+    {
+        tN2kMsg N2kMsg;
+        SetN2kPressure(N2kMsg,0,2,N2kps_Atmospheric,baro*10);
+        NMEA2000.SendMsg(N2kMsg);
+        if (bSentBaro == false)
+        {
+            Serial.println("Sending Baro");
+            bSentBaro = true;
+        }
+    }
 }
 
 //---------------------------------------------------------------------
@@ -289,6 +294,50 @@ void ScaleHighLowRange (uint16_t& high , uint16_t &low , uint16_t &range)
 //-------------------------------------
 //
 //-------------------------------------
+void NMEA2000ISOAddrClaim (const tN2kMsg &N2kMsg)
+{
+}
+
+
+//-------------------------------------
+//
+//-------------------------------------
+
+typedef struct {
+    unsigned long PGN;
+    void (*Handler)(const tN2kMsg &N2kMsg); 
+  } tNMEA2000Handler;
+  
+  void NMEA2000Pressure (const tN2kMsg &N2kMsg);
+  
+  tNMEA2000Handler NMEA2000Handlers[]={
+    {60928L,&NMEA2000ISOAddrClaim},
+    {0,0}
+  };
+
+
+//-------------------------------------
+//
+//-------------------------------------
+void HandleNMEA2000Msg(const tN2kMsg & N2kMsg) 
+{
+    int iHandler;
+    // Find handler
+    int N2kMsgPGN = N2kMsg.PGN;
+    if (N2kMsg.PGN == 126993 && !canBusConnected) // NMEA2000 Heartbeat
+    {
+        // the can bus is connected
+        canBusConnected = true;
+        digitalWrite (CAN_BUS , LOW);// can bus started
+        Serial.println("NMEA2000 Heartbeat received");
+        NMEA2000.SendProductInformation (0x0);
+    }
+}
+
+
+//-------------------------------------
+//
+//-------------------------------------
 void UpdateBaro(int16_t baro )
 {
    // get the high low and range
@@ -322,26 +371,9 @@ void loop()
 {
     lcdScreen.SplashScreen(wifiConnected , WiFi.localIP() , WiFi.macAddress());
 
-    #ifdef TEST_EEPROM
+#ifdef TEST_EEPROM
     RunBoardTests(lcdScreen , eepromManager);
 #endif
-
-    // Blink the LEDS to show we are alive
-    LED_1_State = HIGH;
-    LED_2_State = LOW;
-    
-    for (int i = 0 ; i < 6 ; i++)
-    {
-        digitalWrite (LED_1 , LED_1_State);
-        digitalWrite (LED_2 , LED_2_State);
-        LED_1_State = !LED_1_State;
-        LED_2_State = !LED_2_State;
-        delay (500);
-    }
-    digitalWrite (LED_1 , LOW);
-    digitalWrite (LED_2 , LOW);
-    digitalWrite (LED_3 , HIGH);
-    digitalWrite (LED_4 , LOW);
 
      // draw the screen
     lcdScreen.DrawInitScreen ();
@@ -363,13 +395,18 @@ void loop()
     {
         if (lastSendTime == 0 || millis() > lastSendTime + 1000)
         {
+            int status = MODULE_CAN->SR.B.BS;
+            //Serial.printf ("CAN Bus Status: %d\n", status);
+            if (status == 1)
+            {
+                NMEA2000.Open();
+            }
+
             SendPressure(int_pressure);
             lastSendTime = millis();
-            
-            //digitalWrite (LED_3 , LED_1_State);
-            //LED_1_State = !LED_1_State; save current
-            
+      
         }
+
         if (lastReadTime == 0 || millis() - lastReadTime > SAMPLE_TIME / 8)
         {
             lastReadTime = millis();
@@ -423,6 +460,5 @@ void loop()
           ArduinoOTA.handle();
 #endif
         NMEA2000.ParseMessages();
-
     }
 }

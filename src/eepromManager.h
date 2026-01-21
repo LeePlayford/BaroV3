@@ -7,6 +7,7 @@
 #include <Arduino.h>
 #include <SPI.h>
 #include <EEPROM.h>
+#include <TFT_eSPI.h>
 
 //-------------------------------------
 //
@@ -34,7 +35,7 @@ public:
    
 
     // Test the eeprom
-    bool TestEeprom(int p_Size , bool printResult , int location );
+    bool TestEeprom(int p_Size , bool printResult , int location , TFT_eSPI &tft , int textX , int textY);
 
 
 private:

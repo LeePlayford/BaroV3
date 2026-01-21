@@ -6,7 +6,7 @@
 //
 //-------------------------------------
 EepromManager::EepromManager() :
-    m_EEPROM_TYPE(0)
+    m_EEPROM_TYPE(1)
 {
     // Constructor
     Wire.begin();
@@ -135,7 +135,7 @@ byte EepromManager::ReadEEPROM1(int deviceaddress, unsigned int eeaddress )
 //----------------------------------------
 // Test EEprom Code
 //----------------------------------------
-bool EepromManager::TestEeprom(int p_Size , bool printResult , int location )
+bool EepromManager::TestEeprom(int p_Size , bool printResult , int location , TFT_eSPI &tft, int textX , int textY)
 {
    
     // Print out the results
@@ -146,6 +146,8 @@ bool EepromManager::TestEeprom(int p_Size , bool printResult , int location )
     bool result = true;
 
     ReadEEPROM (EepromAddr , 0);
+    char buf [32];
+
 
     for (int i = 0 ; i < p_Size; i++)
     {
@@ -159,13 +161,17 @@ bool EepromManager::TestEeprom(int p_Size , bool printResult , int location )
         unsigned char byte1 = ReadEEPROM (EepromAddr , i*2);
         unsigned char byte2 = ReadEEPROM (EepromAddr , (i*2) + 1);
         
-        if (!printResult && (i % 40) == 0) // put it on the tft
+        if ((i % 40) == 0) // put it on the tft
         {
-            char buf [10];
             float percent = ((float)i / (float)p_Size) * 100.f;
-            sprintf(buf , "%d%%" , (int) percent);
-            Serial.printf ("Eeprom test %d%%\r\n" , (int) percent);
-
+            if (printResult)
+            {
+                sprintf(buf , "%d%%" , (int) percent);
+                Serial.printf ("Eeprom test %d%%\r\n" , (int) percent);
+            }
+            sprintf (buf , "Eeprom test %d%%" , (int)percent);
+            tft.setTextColor (TFT_YELLOW , 0);
+            tft.drawString (buf , textX , textY , 1);
         }
         
         if (byte1 != 0xaa || byte2 != 0x55)
@@ -177,6 +183,9 @@ bool EepromManager::TestEeprom(int p_Size , bool printResult , int location )
                 location = byte1 << 8 | byte2;
                 break;
             }
+            sprintf (buf , "Eeprom Fail at %d" , i*2);
+            tft.setTextColor (TFT_RED , 0);
+            tft.drawString (buf , textX , textY , 1);
         }
         else
         {

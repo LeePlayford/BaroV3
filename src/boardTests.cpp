@@ -81,7 +81,7 @@ bool RunBoardTests(LcdScreen & lcdScreen , EepromManager &eepromManager)
     testNumber = 4;
     tft.drawString ("Memory Test " , TEST_INITIAL_X , TEST_RESULTS_Y + (testNumber*TEST_RESULTS_LINE_HEIGHT) ,1);
     int location; // used for the error checking
-    bool result = eepromManager.TestEeprom(400 , false , location);
+    bool result = eepromManager.TestEeprom(400 , true , location , tft , TEST_RESULTS_X , TEST_RESULTS_Y + (testNumber*TEST_RESULTS_LINE_HEIGHT));
 
     if (result)
     {
@@ -95,6 +95,7 @@ bool RunBoardTests(LcdScreen & lcdScreen , EepromManager &eepromManager)
         tft.setTextColor(TFT_RED , cBackground);
         tft.drawString (" = EEPROM Test FAILED =" , TEST_INITIAL_X , TEST_RESULTS_Y + (testNumber*TEST_RESULTS_LINE_HEIGHT) ,1);
         tft.setTextColor (TFT_GREEN , cBackground);
+        sleep (5);
     }
     return result;
 }
