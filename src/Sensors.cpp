@@ -14,10 +14,22 @@ bool InitSensors ()
 #ifdef BMP
     if (!bmp.begin(0x76))
     {
-        Serial.println(F("Could not find a valid BMP280 sensor, check wiring!"));
+       if (!bmp.begin(0x77))
+        {
+            Serial.println(F("Could not find a valid BMP280 sensor, check wiring!"));
+        }
+        else
+        {
+            Serial.println(F("BMP280 sensor found at 0x77"));
+        }
     }
+        
     else
     {
+        Serial.println(F("BMP280 sensor found at 0x76"));
+    
+        //Serial.println(F("Could not find a valid BMP280 sensor, check wiring!"));
+    
     /* Default settings from datasheet. */
         bmp.setSampling(Adafruit_BMP280::MODE_NORMAL,     /* Operating Mode. */
                         Adafruit_BMP280::SAMPLING_X2,     /* Temp. oversampling */
@@ -27,7 +39,7 @@ bool InitSensors ()
         bBaroSensorValid = true;
     }
 #elif BME
-    if (!bme.begin(0x76))
+    if (!bme.begin(0x77))
     {
         Serial.println(F("Could not find a valid BME280 sensor, check wiring!"));
     }

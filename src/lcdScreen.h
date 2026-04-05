@@ -12,7 +12,7 @@
 // Consts and defines
 //-------------------------------------
 
-constexpr char version[] = "2.01";
+constexpr char version[] = "5.01";
 
 // Colour Defines
 #define BLACK   0x0000

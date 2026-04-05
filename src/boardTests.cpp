@@ -64,10 +64,10 @@ bool RunBoardTests(LcdScreen & lcdScreen , EepromManager &eepromManager)
 
     // Test 3 Get Input Voltage
     testNumber = 3;
-    int inVal = analogRead(33);
-    const float vDrop = 0.76f;
+    int inVal = analogRead(GPIO_NUM_7);
+    const float vDrop = 0.f;//0.76f;
 
-    float voltage = mapfloat ((float)inVal , 863.f , 1318.f , 9.24f , 13.24f);
+    float voltage = mapfloat ((float)inVal , 1650.f , 2460.f , 8.55f , 12.56f);
     voltage += vDrop;
 
     tft.drawString ("Input Voltage" , TEST_INITIAL_X , TEST_RESULTS_Y + (testNumber*TEST_RESULTS_LINE_HEIGHT) ,1);

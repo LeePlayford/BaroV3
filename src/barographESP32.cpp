@@ -17,8 +17,8 @@
 #include <driver/twai.h>
 
 // ESP32 Can Setup
-#define ESP32_CAN_TX_PIN GPIO_NUM_16
-#define ESP32_CAN_RX_PIN GPIO_NUM_17
+#define ESP32_CAN_TX_PIN GPIO_NUM_4
+#define ESP32_CAN_RX_PIN GPIO_NUM_5
 
 #include <Arduino.h>
 
@@ -35,10 +35,10 @@
 
 
 //led defines
-#define BACKLIGHT GPIO_NUM_32
-#define CAN_BUS GPIO_NUM_25
-#define LED01 GPIO_NUM_25
-#define LED02 GPIO_NUM_26
+#define BACKLIGHT GPIO_NUM_40
+#define CAN_BUS GPIO_NUM_12
+#define LED01 GPIO_NUM_12
+#define LED02 GPIO_NUM_13
 
 // Data Defines
 uint32_t SAMPLE_TIME = 86400/4*10;
@@ -76,6 +76,7 @@ bool canBusConnected = false;
 // Function prototypes
 void GetHighLowRange (uint16_t& high , uint16_t &low , uint16_t &range);
 void HandleNMEA2000Msg(const tN2kMsg & N2kMsg);
+void PWMSetup (int led ,int channel, int duty);
 
  
 //---------------------------------------------------------------------
@@ -94,8 +95,15 @@ void setup()
 
     pinMode (LED01 , OUTPUT);
     pinMode (LED02 , OUTPUT);
-    //digitalWrite (LED01 , HIGH);
-    //digitalWrite (LED02 , HIGH);
+    for (int i = 0 ; i < 10 ; i++)
+    {
+        digitalWrite (LED01 , HIGH);
+        digitalWrite (LED02 , LOW);
+        delay (100);
+        digitalWrite (LED01 , LOW);
+        digitalWrite (LED02 , HIGH);
+        delay (100);
+    }
 
     //digitalWrite (BACKLIGHT , HIGH);
     digitalWrite (CAN_BUS , HIGH);
@@ -172,8 +180,7 @@ void setup()
     unsigned long uniqueId = (mac[3] << 16) | (mac[4] <<  8) | mac[5];
 
     // setup pwm
-    // channel , freq , resolution
-    //ledcSetup (0,5000,8);
+    PWMSetup (BACKLIGHT , 0 , 50); // Backlight on full
 
     // Can Bus Set up
     // Reserve enough buffer for sending all messages. 
@@ -181,7 +188,7 @@ void setup()
     // Set Product information
     NMEA2000.SetProductInformation("00000001", // Manufacturer's Model serial code
                                  100, // Manufacturer's product code
-                                 "Barograph ESP32",  // Manufacturer's Model ID
+                                 "Barograph ESP32S3",  // Manufacturer's Model ID
                                  "2.0.0.0 (2025-06-18)",    // Manufacturer's Software version code
                                  "4.0.0.0 (2025-02-01)"     // Manufacturer's Model version
                                  );
@@ -283,12 +290,12 @@ void ScaleHighLowRange (uint16_t& high , uint16_t &low , uint16_t &range)
 //----------------------------------------
 //
 //----------------------------------------
-/*void PWMSetup (int led ,int channel, int duty)
+void PWMSetup (int led ,int channel, int duty)
 {
     ledcSetup (channel , 5000 , 8);
     ledcAttachPin (led , channel);
     ledcWrite (channel , duty);
-}*/
+}
 
 
 //-------------------------------------
@@ -388,11 +395,17 @@ void loop()
     int16_t lastPressure = 0;
 
     int16_t int_pressure = ReadPressure();
- 
+
+
+     
     int16_t counter = 0;
     
     while (true)
     {
+        static uint8_t duty = 0;
+        ledcWrite (0, duty++);
+        if (duty > 255) duty = 0;
+
         if (lastSendTime == 0 || millis() > lastSendTime + 1000)
         {
             int status = MODULE_CAN->SR.B.BS;

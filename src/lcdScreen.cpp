@@ -267,7 +267,7 @@ void LcdScreen::SplashScreen (bool wifiConnected , IPAddress ip , String mac)
     m_tft.drawString ("Version" , 150 , 150 , 1);
     m_tft.drawString (version , 300 , 150 , 1);
     m_tft.setTextColor(TFT_YELLOW , cBackground);
-    m_tft.drawString ("Lee Playford (c) 2025" , 150 , 200 , 1);
+    m_tft.drawString ("Lee Playford (c) 2026" , 150 , 200 , 1);
 
     if (wifiConnected)
     {
@@ -277,6 +277,7 @@ void LcdScreen::SplashScreen (bool wifiConnected , IPAddress ip , String mac)
         m_tft.drawString ("MAC Address" , 50 , 300 , 1);
         m_tft.drawString (mac , 250 , 300 , 1);
     }
+    sleep(5);
 }
 
 
